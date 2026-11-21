@@ -1,39 +1,78 @@
-import { createContext, useContext, useEffect, useState } from 'react';
-import { BrowserRouter, Link, NavLink, Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { BrowserRouter, Link, NavLink, Navigate, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { Toaster, toast } from 'react-hot-toast';
-import { Wrench, Menu, X, Search, ArrowRight, Smartphone, Laptop, Snowflake, Refrigerator, Tv, WashingMachine, Zap, ShieldCheck, Clock3, BadgeDollarSign, LayoutDashboard, UserRound, LogOut, ChevronDown, CalendarDays, MapPin, Star } from 'lucide-react';
+import { Wrench, Menu, X, Search, ArrowRight, Smartphone, Laptop, Snowflake, Refrigerator, Tv, WashingMachine, Zap, ShieldCheck, Clock3, BadgeDollarSign, LayoutDashboard, UserRound, LogOut, ChevronDown, CalendarDays, MapPin, Star, type LucideIcon } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { authClient } from './lib/auth-client';
 import './App.css';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 const api = axios.create({ baseURL: API });
 
-const AuthContext = createContext(null);
+interface FixMateUser {
+  id: string;
+  name: string;
+  email: string;
+  role: 'customer' | 'technician' | 'admin';
+  image?: string;
+  phone?: string;
+  area?: string;
+  bio?: string;
+}
+
+interface AuthContextValue {
+  user: FixMateUser | null;
+  login: (user: FixMateUser, token: string) => void;
+  logout: () => Promise<void>;
+  refreshUser: () => Promise<void>;
+  loading: boolean;
+}
+
+const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('fixmate_user') || 'null'));
-  const [loading, setLoading] = useState(false);
+  const [user, setUser] = useState<FixMateUser | null>(null);
+  const [loading, setLoading] = useState(true);
   useEffect(() => {
-    const token = localStorage.getItem('fixmate_token');
-    if (token) api.defaults.headers.common.Authorization = `Bearer ${token}`;
+    let active = true;
+    const restoreSession = async () => {
+      try {
+        const { data: session } = await authClient.getSession({ query: {} });
+        if (!session) return;
+        const { data: tokenData, error } = await authClient.token({ query: {} });
+        if (error || !tokenData) throw new Error(error?.message || 'Could not restore your session');
+        api.defaults.headers.common.Authorization = `Bearer ${tokenData.token}`;
+        const { data: profile } = await api.get('/api/me');
+        if (active) setUser(profile);
+      } catch (error) {
+        if (active) toast.error(error.message || 'Could not restore your session');
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    restoreSession();
+    return () => { active = false; };
   }, []);
-  const login = (data) => {
-    localStorage.setItem('fixmate_token', data.token);
-    localStorage.setItem('fixmate_user', JSON.stringify(data.user));
-    api.defaults.headers.common.Authorization = `Bearer ${data.token}`;
-    setUser(data.user);
+  const login = (profile: FixMateUser, token: string) => {
+    api.defaults.headers.common.Authorization = `Bearer ${token}`;
+    setUser(profile);
   };
-  const logout = () => {
-    localStorage.removeItem('fixmate_token'); localStorage.removeItem('fixmate_user');
-    delete api.defaults.headers.common.Authorization; setUser(null);
+  const logout = async () => {
+    await authClient.signOut({});
+    delete api.defaults.headers.common.Authorization;
+    setUser(null);
   };
   const refreshUser = async () => {
-    const { data } = await api.get('/api/auth/me');
-    localStorage.setItem('fixmate_user', JSON.stringify(data)); setUser(data);
+    const { data } = await api.get('/api/me');
+    setUser(data);
   };
-  return <AuthContext.Provider value={{ user, login, logout, refreshUser, loading, setLoading }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, login, logout, refreshUser, loading }}>{children}</AuthContext.Provider>;
 }
-const useAuth = () => useContext(AuthContext);
+const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) throw new Error('useAuth must be used inside AuthProvider');
+  return context;
+};
 
 function Logo({ light = false }) {
   return <Link className={`logo ${light ? 'logo-light' : ''}`} to="/"><span className="logo-mark"><Wrench size={21} /></span><span>Fix<span>Mate</span></span></Link>;
@@ -43,10 +82,12 @@ function Navbar() {
   const { user, logout } = useAuth();
   const [open, setOpen] = useState(false);
   const [profile, setProfile] = useState(false);
-  const location = useLocation();
   const navigate = useNavigate();
   const dashboard = user ? `/dashboard/${user.role}` : '/dashboard/customer';
-  const signOut = () => { logout(); toast.success('Signed out successfully'); navigate('/'); };
+  const signOut = async () => {
+    try { await logout(); toast.success('Signed out successfully'); navigate('/'); }
+    catch { toast.error('Could not sign out'); }
+  };
   return <header className="navbar">
     <div className="nav-inner">
       <Logo />
@@ -91,7 +132,7 @@ function PublicLayout({ children }) { return <><Navbar /><main>{children}</main>
 function Home() {
   const [services, setServices] = useState([]);
   useEffect(() => { api.get('/api/services', { params: { limit: 6 } }).then(({ data }) => setServices(data.items)).catch(() => setServices([])); }, []);
-  const categories = [
+  const categories: [string, LucideIcon][] = [
     ['Smartphone', Smartphone], ['Laptop & PC', Laptop], ['AC', Snowflake], ['Refrigerator', Refrigerator],
     ['TV', Tv], ['Washing Machine', WashingMachine], ['Electrical', Zap],
   ];
@@ -153,7 +194,23 @@ function AuthPage({ mode }) {
   if (user) return <Navigate to={`/dashboard/${user.role}`} replace />;
   const submit = async (e) => { e.preventDefault(); setError('');
     if (mode === 'signup' && (form.password.length < 6 || !/[A-Z]/.test(form.password) || !/[a-z]/.test(form.password))) { setError('Use 6+ characters with uppercase and lowercase letters'); return; }
-    try { const { data } = await api.post(`/api/auth/${mode === 'signup' ? 'register' : 'login'}`, form); login(data); toast.success(mode === 'signup' ? 'Account created successfully' : 'Signed in successfully'); navigate(params.get('redirect') || `/dashboard/${data.user.role}`); } catch (err) { const message = err.response?.data?.message || 'Authentication failed'; setError(message); toast.error(message); }
+    try {
+      const result = mode === 'signup'
+        ? await authClient.signUp.email({ name: form.name, email: form.email, password: form.password })
+        : await authClient.signIn.email({ email: form.email, password: form.password });
+      if (result.error) throw new Error(result.error.message);
+      const { data: tokenData, error: tokenError } = await authClient.token({ query: {} });
+      if (tokenError || !tokenData) throw new Error(tokenError?.message || 'Could not create an API session');
+      api.defaults.headers.common.Authorization = `Bearer ${tokenData.token}`;
+      if (mode === 'signup') await api.patch('/api/profile/role', { role: form.role });
+      const { data: profile } = await api.get('/api/me');
+      login(profile, tokenData.token);
+      toast.success(mode === 'signup' ? 'Account created successfully' : 'Signed in successfully');
+      navigate(params.get('redirect') || `/dashboard/${profile.role}`);
+    } catch (err) {
+      const message = err.response?.data?.message || err.message || 'Authentication failed';
+      setError(message); toast.error(message);
+    }
   };
   return <PublicLayout><section className="auth-section"><div className="auth-card"><Logo /><span className="eyebrow">{mode === 'signup' ? 'Create your account' : 'Welcome back'}</span><h1>{mode === 'signup' ? 'Join FixMate' : 'Sign in to FixMate'}</h1>{error && <div className="form-error">{error}</div>}<form onSubmit={submit}>
     {mode === 'signup' && <label>Full Name<input required value={form.name} onChange={(e) => setForm({...form,name:e.target.value})} /></label>}
@@ -164,8 +221,9 @@ function AuthPage({ mode }) {
   </form><p className="auth-switch">{mode === 'signup' ? 'Already have an account?' : 'New to FixMate?'} <Link to={mode === 'signup' ? '/sign-in' : '/sign-up'}>{mode === 'signup' ? 'Sign In' : 'Create account'}</Link></p></div></section></PublicLayout>;
 }
 
-function ProtectedRoute({ role, children }) {
-  const { user } = useAuth();
+function ProtectedRoute({ role, children }: { role?: FixMateUser['role']; children: ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="loading"><span /></div>;
   if (!user) return <Navigate to="/sign-in" replace />;
   if (role && user.role !== role) return <Navigate to={`/dashboard/${user.role}`} replace />;
   return children;
@@ -179,7 +237,10 @@ function DashboardLayout({ title, children }) {
     technician: [['Overview','/dashboard/technician','LayoutDashboard'],['Add a Service','/dashboard/technician/add-service','Wrench'],['My Services','/dashboard/technician/my-services','Wrench'],['Manage Requests','/dashboard/technician/requests','CalendarDays']],
     admin: [['Overview','/dashboard/admin','LayoutDashboard'],['Manage Users','/dashboard/admin/users','UserRound'],['Service Approval','/dashboard/admin/services','Wrench'],['All Bookings','/dashboard/admin/bookings','CalendarDays'],['Transactions','/dashboard/admin/transactions','BadgeDollarSign']],
   };
-  const signOut = () => { logout(); navigate('/'); toast.success('Signed out successfully'); };
+  const signOut = async () => {
+    try { await logout(); toast.success('Signed out successfully'); navigate('/'); }
+    catch { toast.error('Could not sign out'); }
+  };
   return <div className="dashboard-shell"><aside className={open ? 'sidebar open' : 'sidebar'}><div className="sidebar-head"><Logo /><button onClick={() => setOpen(false)}><X /></button></div><nav>{(menus[role] || []).map(([label,to]) => <NavLink key={to} to={to} end={to === `/dashboard/${role}`} onClick={() => setOpen(false)}><LayoutDashboard size={18} />{label}</NavLink>)}</nav><div className="sidebar-profile"><img src={user?.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'User')}`} alt="" /><div><strong>{user?.name}</strong><span>{role}</span></div></div></aside><div className="dashboard-main"><header className="dashboard-topbar"><button className="menu-button" onClick={() => setOpen(true)}><Menu /></button><Link className="back-home" to="/">← Back to Home</Link><Link to="/dashboard/profile" className="top-profile"><img src={user?.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'User')}`} alt="" /><div><strong>{user?.name}</strong><span>{role}</span></div></Link><button className="icon-button" onClick={signOut}><LogOut size={18} /></button></header><main className="dashboard-content"><div className="dashboard-heading"><div><span>Dashboard</span><h1>{title}</h1></div></div>{children}</main></div></div>;
 }
 
@@ -240,12 +301,56 @@ function TechnicianServices() {
 }
 
 function TechnicianRequests() {
-  const [items,setItems]=useState([]); const [filter,setFilter]=useState('All'); const [complete,setComplete]=useState(null);
-  const load=()=>api.get('/api/bookings/technician').then(({data})=>setItems(data)).catch(()=>toast.error('Could not load requests'));
-  useEffect(()=>{load()},[]);
-  const update=async(id,status,extra={})=>{try{await api.patch(`/api/bookings/${id}/status`,{status,...extra});toast.success(`Booking marked ${status}`);setComplete(null);load();}catch(e){toast.error(e.response?.data?.message||'Update failed')}};
-  const filtered=filter==='All'?items:items.filter(b=>{if(filter==='In Progress')return b.status==='in-progress';return b.status===filter.toLowerCase()});
-  return <DashboardLayout title="Manage Requests"><div className="toolbar"><label>Filter by status<select value={filter} onChange={e=>setFilter(e.target.value)}>{['All','Requested','Accepted','In Progress','Completed'].map(x=><option key={x}>{x}</option>)}</select></label></div><div className="table-panel">{filtered.length?<div className="responsive-table"><table><thead><tr><th>Customer</th><th>Service</th><th>Phone / Address</th><th>Preferred Date</th><th>Problem</th><th>Status</th><th>Action</th></tr></thead><tbody>{filtered.map(b=><tr key={b._id}><td><strong>{b.customerName}</strong></td><td>{b.serviceTitle}</td><td><strong>{b.customerPhone}</strong><br/><span>{b.address}</span></td><td>{new Date(b.preferredDate).toLocaleDate()}</td><td className="problem-cell">{b.problemDescription}</td><td><StatusBadge status={b.status}/></td><td>{b.status==='requested'?<div className="table-actions"><button className="btn btn-primary btn-small" onClick={()=>update(b._id,'accepted')}>Accept</button><button className="btn btn-danger btn-small" onClick={()=>update(b._id,'rejected')}>Reject</button></div>:b.status==='accepted'?<button className="btn btn-primary btn-small" onClick={()=>update(b._id,'in-progress')}>Start Work</button>:b.status==='in-progress'?<button className="btn btn-primary btn-small" onClick={()=>setComplete(b)}>Mark Completed</button>:<StatusBadge status={b.paymentStatus}/>}</td></tr>)}</tbody></table></div>:<div className="empty-state"><CalendarDays/><h3>No requests found</h3><p>Requests matching this status will appear here.</p></div>}</div>{complete&&<div className="modal-backdrop"><div className="modal"><div className="modal-head"><h2>Complete Job</h2><button onClick={()=>setComplete(null)}><X/></button></div><form onSubmit={e=>{e.preventDefault();update(complete._id,'completed',{finalAmount:e.target.elements.amount.value})}}><label>Final Amount ($)<input name="amount" type="number" min="1" defaultValue={complete.finalAmount||complete.basePrice} required/></label><button className="btn btn-primary btn-full">Mark as Completed</button></form></div></div>}</DashboardLayout>;
+  const [items, setItems] = useState([]);
+  const [filter, setFilter] = useState('All');
+  const [complete, setComplete] = useState(null);
+  const load = () => api.get('/api/bookings/technician').then(({ data }) => setItems(data)).catch(() => toast.error('Could not load requests'));
+  useEffect(() => { load(); }, []);
+  const update = async (id, status, extra = {}) => {
+    try {
+      await api.patch(`/api/bookings/${id}/status`, { status, ...extra });
+      toast.success(`Booking marked ${status}`);
+      setComplete(null);
+      load();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Update failed');
+    }
+  };
+  const filtered = filter === 'All' ? items : items.filter((booking) => {
+    if (filter === 'In Progress') return booking.status === 'in-progress';
+    return booking.status === filter.toLowerCase();
+  });
+  return <DashboardLayout title="Manage Requests">
+    <div className="toolbar"><label>Filter by status<select value={filter} onChange={(event) => setFilter(event.target.value)}>{['All', 'Requested', 'Accepted', 'In Progress', 'Completed'].map((status) => <option key={status}>{status}</option>)}</select></label></div>
+    <div className="table-panel">
+      {filtered.length ? <div className="responsive-table"><table>
+        <thead><tr><th>Customer</th><th>Service</th><th>Phone / Address</th><th>Preferred Date</th><th>Problem</th><th>Status</th><th>Action</th></tr></thead>
+        <tbody>{filtered.map((booking) => <tr key={booking._id}>
+          <td><strong>{booking.customerName}</strong></td><td>{booking.serviceTitle}</td>
+          <td><strong>{booking.customerPhone}</strong><br /><span>{booking.address}</span></td>
+          <td>{new Date(booking.preferredDate).toLocaleDateString()}</td><td className="problem-cell">{booking.problemDescription}</td>
+          <td><StatusBadge status={booking.status} /></td>
+          <td>{booking.status === 'requested'
+            ? <div className="table-actions"><button className="btn btn-primary btn-small" onClick={() => update(booking._id, 'accepted')}>Accept</button><button className="btn btn-danger btn-small" onClick={() => update(booking._id, 'rejected')}>Reject</button></div>
+            : booking.status === 'accepted' ? <button className="btn btn-primary btn-small" onClick={() => update(booking._id, 'in-progress')}>Start Work</button>
+              : booking.status === 'in-progress' ? <button className="btn btn-primary btn-small" onClick={() => setComplete(booking)}>Mark Completed</button>
+                : <StatusBadge status={booking.paymentStatus} />}
+          </td>
+        </tr>)}</tbody>
+      </table></div> : <div className="empty-state"><CalendarDays /><h3>No requests found</h3><p>Requests matching this status will appear here.</p></div>}
+    </div>
+    {complete && <div className="modal-backdrop"><div className="modal">
+      <div className="modal-head"><h2>Complete Job</h2><button onClick={() => setComplete(null)}><X /></button></div>
+      <form onSubmit={(event) => {
+        event.preventDefault();
+        const amount = new FormData(event.currentTarget).get('amount');
+        update(complete._id, 'completed', { finalAmount: Number(amount) });
+      }}>
+        <label>Final Amount ($)<input name="amount" type="number" min="1" defaultValue={complete.finalAmount || complete.basePrice} required /></label>
+        <button className="btn btn-primary btn-full">Mark as Completed</button>
+      </form>
+    </div></div>}
+  </DashboardLayout>;
 }
 
 function AdminDashboard() {
