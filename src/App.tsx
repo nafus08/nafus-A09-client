@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { Component, createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { BrowserRouter, Link, NavLink, Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { Toaster, toast } from 'react-hot-toast';
@@ -440,6 +440,25 @@ function NotFound() {
   return <PublicLayout><section className="not-found"><span><Wrench/></span><h1>404 — Page Not Found</h1><p>This repair route is not on our map.</p><Link className="btn btn-primary" to="/">Back to Home</Link></section></PublicLayout>;
 }
 
+class AppErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error) {
+    console.error('Application render error:', error);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return <section className="not-found error-fallback" role="alert"><span><Wrench /></span><h1>Something went wrong</h1><p>We couldn’t display this page. Please try again.</p><button className="btn btn-primary" onClick={() => window.location.reload()}>Reload page</button></section>;
+    }
+    return this.props.children;
+  }
+}
+
 function AppRoutes() {
   return <Routes>
     <Route path="/" element={<Home/>}/><Route path="/services" element={<ServicesPage/>}/><Route path="/services/:id" element={<ServiceDetails/>}/><Route path="/about" element={<About/>}/>
@@ -454,6 +473,6 @@ function AppRoutes() {
 }
 
 export default function App() {
-  return <BrowserRouter><AuthProvider><Toaster position="top-right"/><AppRoutes/></AuthProvider></BrowserRouter>;
+  return <BrowserRouter><AuthProvider><Toaster position="top-right"/><AppErrorBoundary><AppRoutes/></AppErrorBoundary></AuthProvider></BrowserRouter>;
 }
 
