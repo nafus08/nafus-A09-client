@@ -321,9 +321,11 @@ function CustomerPayments() {
 
 function TechnicianDashboard() {
   const [stats,setStats]=useState({totalServices:0,approvedServices:0,pendingRequests:0});
-  useEffect(()=>{api.get('/api/technician/stats').then(({data})=>setStats(data)).catch(()=>{});},[]);
+  const [loading,setLoading]=useState(true); const [loadError,setLoadError]=useState(false);
+  const load=async()=>{setLoading(true);setLoadError(false);try{const {data}=await api.get('/api/technician/stats');setStats(data)}catch{setLoadError(true)}finally{setLoading(false)}};
+  useEffect(()=>{load()},[]);
   const chartData=[{name:'Total',value:stats.totalServices},{name:'Approved',value:stats.approvedServices},{name:'Pending',value:stats.pendingRequests}];
-  return <DashboardLayout title="Technician Overview"><StatCards items={[{value:stats.totalServices,label:'Total Services'},{value:stats.approvedServices,label:'Approved Services'},{value:stats.pendingRequests,label:'Pending Requests'}]} /><div className="panel"><h3>Service & Request Summary</h3><div className="chart-box"><ResponsiveContainer width="100%" height={280}><BarChart data={chartData}><XAxis dataKey="name"/><YAxis allowDecimals={false}/><Tooltip/><Bar dataKey="value" fill="#0d9488" radius={[6,6,0,0]} /></BarChart></ResponsiveContainer></div></div></DashboardLayout>;
+  return <DashboardLayout title="Technician Overview">{loading?<div className="loading" aria-label="Loading overview"><span/></div>:loadError?<div className="empty-state" role="alert"><h3>Overview couldn’t be loaded</h3><button className="btn btn-primary" onClick={load}>Retry</button></div>:<><StatCards items={[{value:stats.totalServices,label:'Total Services'},{value:stats.approvedServices,label:'Approved Services'},{value:stats.pendingRequests,label:'Pending Requests'}]} /><div className="panel"><h3>Service & Request Summary</h3><div className="chart-box"><ResponsiveContainer width="100%" height={280}><BarChart data={chartData}><XAxis dataKey="name"/><YAxis allowDecimals={false}/><Tooltip/><Bar dataKey="value" fill="#0d9488" radius={[6,6,0,0]} /></BarChart></ResponsiveContainer></div></div></>}</DashboardLayout>;
 }
 
 function AddService() {
