@@ -186,8 +186,17 @@ function ServicesPage() {
 
 function ServiceDetails() {
   const { id } = useParams(); const { user } = useAuth(); const navigate = useNavigate();
-  const [service, setService] = useState(null); const [open, setOpen] = useState(false); const [form, setForm] = useState({ phone: user?.phone || '', address: '', preferredDate: '', problemDescription: '' });
-  useEffect(() => { api.get(`/api/services/${id}`).then(({ data }) => setService(data)).catch(() => setService(false)); }, [id]);
+  const [service, setService] = useState(null); const [loadError, setLoadError] = useState(false); const [retry, setRetry] = useState(0); const [open, setOpen] = useState(false); const [form, setForm] = useState({ phone: user?.phone || '', address: '', preferredDate: '', problemDescription: '' });
+  useEffect(() => {
+    let active = true;
+    setService(null);
+    setLoadError(false);
+    api.get(`/api/services/${id}`)
+      .then(({ data }) => { if (active) setService(data); })
+      .catch((error) => { if (active) { setLoadError(error.response?.status !== 404); setService(error.response?.status === 404 ? false : null); } });
+    return () => { active = false; };
+  }, [id, retry]);
+  if (loadError) return <PublicLayout><section className="empty-state container" role="alert"><h3>Service details couldn’t be loaded</h3><p>Check your connection and try again.</p><button className="btn btn-primary" onClick={() => setRetry((attempt) => attempt + 1)}>Retry</button></section></PublicLayout>;
   if (service === null) return <PublicLayout><div className="loading"><span /></div></PublicLayout>;
   if (!service) return <Navigate to="/404" replace />;
   const requestRepair = () => { if (!user) navigate(`/sign-in?redirect=/services/${id}`); else if (user.role === 'customer') setOpen(true); };
