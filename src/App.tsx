@@ -7,7 +7,9 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recha
 import { authClient } from './lib/auth-client';
 import './App.css';
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const API = typeof window === 'undefined'
+  ? 'http://127.0.0.1:5000'
+  : window.location.origin;
 const api = axios.create({ baseURL: API });
 
 interface FixMateUser {
