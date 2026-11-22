@@ -296,9 +296,11 @@ function BookingStatusHistory({ history }) {
 
 function CustomerDashboard() {
   const [stats,setStats] = useState({ total:0, active:0, completed:0 });
-  useEffect(()=>{ api.get('/api/customer/stats').then(({data})=>setStats(data)).catch(()=>{}); },[]);
+  const [statsError,setStatsError] = useState(false); const [statsLoading,setStatsLoading] = useState(true);
+  const loadStats = async () => { setStatsError(false); setStatsLoading(true); try { const {data}=await api.get('/api/customer/stats'); setStats(data); } catch { setStatsError(true); } finally { setStatsLoading(false); } };
+  useEffect(()=>{ loadStats(); },[]);
   const chartData = [{name:'Requests',value:stats.total},{name:'Active',value:stats.active},{name:'Completed',value:stats.completed}];
-  return <DashboardLayout title="Customer Overview"><StatCards items={[{value:stats.total,label:'Total Requests'},{value:stats.active,label:'Active Jobs'},{value:stats.completed,label:'Completed Jobs'}]} /><div className="dashboard-grid"><div className="panel"><h3>Job Activity</h3><div className="chart-box"><ResponsiveContainer width="100%" height={260}><BarChart data={chartData}><XAxis dataKey="name" /><YAxis allowDecimals={false} /><Tooltip /><Bar dataKey="value" fill="#0d9488" radius={[6,6,0,0]} /></BarChart></ResponsiveContainer></div></div><div className="panel quick-panel"><h3>Quick actions</h3><Link className="btn btn-primary" to="/services">Browse Services</Link><Link className="btn btn-ghost" to="/dashboard/customer/bookings">View My Bookings</Link></div></div></DashboardLayout>;
+  return <DashboardLayout title="Customer Overview">{statsLoading?<div className="loading" aria-label="Loading overview"><span/></div>:statsError?<div className="empty-state" role="alert"><h3>Overview couldn’t be loaded</h3><button className="btn btn-primary" onClick={loadStats}>Retry</button></div>:<><StatCards items={[{value:stats.total,label:'Total Requests'},{value:stats.active,label:'Active Jobs'},{value:stats.completed,label:'Completed Jobs'}]} /><div className="dashboard-grid"><div className="panel"><h3>Job Activity</h3><div className="chart-box"><ResponsiveContainer width="100%" height={260}><BarChart data={chartData}><XAxis dataKey="name" /><YAxis allowDecimals={false} /><Tooltip /><Bar dataKey="value" fill="#0d9488" radius={[6,6,0,0]} /></BarChart></ResponsiveContainer></div></div><div className="panel quick-panel"><h3>Quick actions</h3><Link className="btn btn-primary" to="/services">Browse Services</Link><Link className="btn btn-ghost" to="/dashboard/customer/bookings">View My Bookings</Link></div></div></>}</DashboardLayout>;
 }
 
 function CustomerBookings() {
