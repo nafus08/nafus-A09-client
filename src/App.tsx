@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { BrowserRouter, Link, NavLink, Navigate, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { BrowserRouter, Link, NavLink, Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { Toaster, toast } from 'react-hot-toast';
 import { Wrench, Menu, X, Search, ArrowRight, Smartphone, Laptop, Snowflake, Refrigerator, Tv, WashingMachine, Zap, ShieldCheck, Clock3, BadgeDollarSign, LayoutDashboard, UserRound, LogOut, ChevronDown, CalendarDays, MapPin, Star, type LucideIcon } from 'lucide-react';
@@ -194,7 +194,7 @@ function About() {
 }
 
 function AuthPage({ mode }) {
-  const { user, login } = useAuth(); const navigate = useNavigate(); const [params] = useSearchParams();
+  const { user, login } = useAuth(); const navigate = useNavigate(); const location = useLocation(); const [params] = useSearchParams();
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'customer' }); const [error, setError] = useState('');
   if (user) return <Navigate to={`/dashboard/${user.role}`} replace />;
   const submit = async (e) => { e.preventDefault(); setError('');
@@ -211,7 +211,11 @@ function AuthPage({ mode }) {
       const { data: profile } = await api.get('/api/me');
       login(profile, tokenData.token);
       toast.success(mode === 'signup' ? 'Account created successfully' : 'Signed in successfully');
-      navigate(params.get('redirect') || `/dashboard/${profile.role}`);
+      const returnPath = location.state?.from;
+      const requestedPath = typeof returnPath === 'string'
+        ? returnPath
+        : returnPath ? `${returnPath.pathname || ''}${returnPath.search || ''}${returnPath.hash || ''}` : params.get('redirect');
+      navigate(requestedPath?.startsWith('/') && !requestedPath.startsWith('//') ? requestedPath : `/dashboard/${profile.role}`, { replace: true });
     } catch (err) {
       const message = err.response?.data?.message || err.message || 'Authentication failed';
       setError(message); toast.error(message);
@@ -227,9 +231,9 @@ function AuthPage({ mode }) {
 }
 
 function ProtectedRoute({ role, children }: { role?: FixMateUser['role']; children: ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, loading } = useAuth(); const location = useLocation();
   if (loading) return <div className="loading"><span /></div>;
-  if (!user) return <Navigate to="/sign-in" replace />;
+  if (!user) return <Navigate to="/sign-in" replace state={{ from: location }} />;
   if (role && user.role !== role) return <Navigate to={`/dashboard/${user.role}`} replace />;
   return children;
 }
