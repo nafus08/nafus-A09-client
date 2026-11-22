@@ -160,7 +160,7 @@ function ServiceCard({ service }) {
 
 function ServicesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [services, setServices] = useState([]); const [total, setTotal] = useState(0); const [loading, setLoading] = useState(true);
+  const [services, setServices] = useState([]); const [total, setTotal] = useState(0); const [loading, setLoading] = useState(true); const [loadError, setLoadError] = useState(false); const [retry, setRetry] = useState(0);
   const search = searchParams.get('search') || ''; const category = searchParams.get('category') || ''; const mode = searchParams.get('mode') || ''; const sort = searchParams.get('sort') || 'newest';
   const pageSize = 9;
   const requestedPage = Number(searchParams.get('page')) || 1;
@@ -168,10 +168,19 @@ function ServicesPage() {
   const page = Math.min(Math.max(1, requestedPage), pageCount);
   const update = (key, value) => { const next = new URLSearchParams(searchParams); value ? next.set(key, value) : next.delete(key); next.set('page', '1'); setSearchParams(next); };
   const changePage = (nextPage) => { const next = new URLSearchParams(searchParams); next.set('page', String(nextPage)); setSearchParams(next); };
-  useEffect(() => { setLoading(true); api.get('/api/services', { params: { search, category, mode, sort, page, limit: pageSize } }).then(({ data }) => { setServices(data.items); setTotal(data.total); }).finally(() => setLoading(false)); }, [search, category, mode, sort, page]);
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setLoadError(false);
+    api.get('/api/services', { params: { search, category, mode, sort, page, limit: pageSize } })
+      .then(({ data }) => { if (active) { setServices(data.items); setTotal(data.total); } })
+      .catch(() => { if (active) setLoadError(true); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [search, category, mode, sort, page, retry]);
   return <PublicLayout><section className="page-hero"><div className="container"><span className="eyebrow">Expert help near you</span><h1>Browse Repair Services</h1></div></section><section className="section container">
     <div className="filter-bar"><label className="search-input"><Search size={18} /><input value={search} onChange={(e) => update('search', e.target.value)} placeholder="Search services or categories" /></label><select value={category} onChange={(e) => update('category', e.target.value)}><option value="">All categories</option>{['Smartphone','Laptop & PC','AC','Refrigerator','TV','Washing Machine','Electrical'].map((c) => <option key={c}>{c}</option>)}</select><select value={mode} onChange={(e) => update('mode', e.target.value)}><option value="">All modes</option><option>Home Visit</option><option>Shop Drop-off</option></select><select value={sort} onChange={(e) => update('sort', e.target.value)}><option value="newest">Newest</option><option value="low">Price: Low to High</option><option value="high">Price: High to Low</option></select></div>
-    {loading ? <div className="loading"><span></span></div> : !services.length ? <div className="empty-state"><Search /><h3>No services found</h3><p>Try changing your search or filters.</p><button className="btn btn-primary" onClick={() => setSearchParams({})}>Clear filters</button></div> : <><p className="results-count">Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} of {total} services</p><div className="service-grid">{services.map((s) => <ServiceCard key={s._id} service={s} />)}</div><nav className="pagination" aria-label="Service pages"><button className="btn btn-ghost" onClick={() => changePage(page - 1)} disabled={page <= 1}>Previous</button><span>Page {page} of {pageCount}</span><button className="btn btn-ghost" onClick={() => changePage(page + 1)} disabled={page >= pageCount}>Next</button></nav></>}
+    {loading ? <div className="loading"><span></span></div> : loadError ? <div className="empty-state" role="alert"><Search /><h3>Services couldn’t be loaded</h3><p>Check your connection and try again.</p><button className="btn btn-primary" onClick={() => setRetry((attempt) => attempt + 1)}>Retry</button></div> : !services.length ? <div className="empty-state"><Search /><h3>No services found</h3><p>Try changing your search or filters.</p><button className="btn btn-primary" onClick={() => setSearchParams({})}>Clear filters</button></div> : <><p className="results-count">Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} of {total} services</p><div className="service-grid">{services.map((s) => <ServiceCard key={s._id} service={s} />)}</div><nav className="pagination" aria-label="Service pages"><button className="btn btn-ghost" onClick={() => changePage(page - 1)} disabled={page <= 1}>Previous</button><span>Page {page} of {pageCount}</span><button className="btn btn-ghost" onClick={() => changePage(page + 1)} disabled={page >= pageCount}>Next</button></nav></>}
   </section></PublicLayout>;
 }
 
