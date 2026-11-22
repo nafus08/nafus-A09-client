@@ -262,6 +262,19 @@ function StatusBadge({ status }) {
   return <span className={`status-badge ${status?.replace(' ', '-')}`}>{status}</span>;
 }
 
+function BookingStatusHistory({ history }) {
+  const entries = Array.isArray(history) ? history : [];
+  return <details className="booking-history">
+    <summary>View history</summary>
+    {entries.length ? <ol>{entries.map((entry, index) => {
+      const date = entry.changedAt || entry.updatedAt || entry.timestamp || entry.createdAt;
+      const parsedDate = date ? new Date(date) : null;
+      const validDate = parsedDate && !Number.isNaN(parsedDate.getTime());
+      return <li key={`${entry.status}-${date || index}`}><StatusBadge status={entry.status} />{validDate && <time dateTime={parsedDate.toISOString()}>{parsedDate.toLocaleString()}</time>}</li>;
+    })}</ol> : <p>No status changes recorded yet.</p>}
+  </details>;
+}
+
 function CustomerDashboard() {
   const [stats,setStats] = useState({ total:0, active:0, completed:0 });
   useEffect(()=>{ api.get('/api/customer/stats').then(({data})=>setStats(data)).catch(()=>{}); },[]);
@@ -275,7 +288,7 @@ function CustomerBookings() {
   useEffect(()=>{load()},[]);
   const cancel=async(id)=>{try{await api.patch(`/api/bookings/${id}/cancel`);toast.success('Booking cancelled');setConfirm(null);load();}catch(e){toast.error(e.response?.data?.message||'Could not cancel')}};
   const pay=async(id)=>{try{const {data}=await api.post('/api/payments/create-checkout-session',{bookingId:id});window.location.href=data.url;}catch(e){toast.error(e.response?.data?.message||'Could not start payment')}};
-  return <DashboardLayout title="My Bookings"><div className="table-panel">{items.length?<div className="responsive-table"><table><thead><tr><th>Service</th><th>Technician</th><th>Preferred date</th><th>Amount</th><th>Status</th><th>Payment</th><th>Action</th></tr></thead><tbody>{items.map(b=><tr key={b._id}><td><div className="table-service"><img src={b.serviceImage} alt="" /><strong>{b.serviceTitle}</strong></div></td><td>{b.technicianName}</td><td>{new Date(b.preferredDate).toLocaleDateString()}</td><td>${b.finalAmount || b.basePrice}</td><td><StatusBadge status={b.status}/></td><td><StatusBadge status={b.paymentStatus}/></td><td>{b.status==='requested'?<button className="btn btn-danger btn-small" onClick={()=>setConfirm(b)}>Cancel</button>:b.status==='completed'&&b.paymentStatus==='unpaid'?<button className="btn btn-primary btn-small" onClick={()=>pay(b._id)}>Pay Now</button>:b.paymentStatus==='paid'?<span className="paid-text">Paid</span>:<span>—</span>}</td></tr>)}</tbody></table></div>:<div className="empty-state"><CalendarDays/><h3>No bookings yet</h3><p>Find a trusted technician and make your first repair request.</p><Link className="btn btn-primary" to="/services">Browse Services</Link></div>}</div>{confirm&&<div className="modal-backdrop"><div className="modal confirm-modal"><h2>Cancel this booking?</h2><p>This action cannot be undone.</p><div className="modal-actions"><button className="btn btn-ghost" onClick={()=>setConfirm(null)}>Keep Booking</button><button className="btn btn-danger" onClick={()=>cancel(confirm._id)}>Yes, Cancel</button></div></div></div>}</DashboardLayout>;
+  return <DashboardLayout title="My Bookings"><div className="table-panel">{items.length?<div className="responsive-table"><table><thead><tr><th>Service</th><th>Technician</th><th>Preferred date</th><th>Amount</th><th>Status</th><th>Payment</th><th>History</th><th>Action</th></tr></thead><tbody>{items.map(b=><tr key={b._id}><td><div className="table-service"><img src={b.serviceImage} alt="" /><strong>{b.serviceTitle}</strong></div></td><td>{b.technicianName}</td><td>{new Date(b.preferredDate).toLocaleDateString()}</td><td>${b.finalAmount || b.basePrice}</td><td><StatusBadge status={b.status}/></td><td><StatusBadge status={b.paymentStatus}/></td><td><BookingStatusHistory history={b.statusHistory}/></td><td>{b.status==='requested'?<button className="btn btn-danger btn-small" onClick={()=>setConfirm(b)}>Cancel</button>:b.status==='completed'&&b.paymentStatus==='unpaid'?<button className="btn btn-primary btn-small" onClick={()=>pay(b._id)}>Pay Now</button>:b.paymentStatus==='paid'?<span className="paid-text">Paid</span>:<span>—</span>}</td></tr>)}</tbody></table></div>:<div className="empty-state"><CalendarDays/><h3>No bookings yet</h3><p>Find a trusted technician and make your first repair request.</p><Link className="btn btn-primary" to="/services">Browse Services</Link></div>}</div>{confirm&&<div className="modal-backdrop"><div className="modal confirm-modal"><h2>Cancel this booking?</h2><p>This action cannot be undone.</p><div className="modal-actions"><button className="btn btn-ghost" onClick={()=>setConfirm(null)}>Keep Booking</button><button className="btn btn-danger" onClick={()=>cancel(confirm._id)}>Yes, Cancel</button></div></div></div>}</DashboardLayout>;
 }
 
 function CustomerPayments() {
