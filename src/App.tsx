@@ -310,9 +310,10 @@ function CustomerBookings() {
 }
 
 function CustomerPayments() {
-  const [items,setItems]=useState([]);
-  useEffect(()=>{api.get('/api/payments/my').then(({data})=>setItems(data)).catch(()=>toast.error('Could not load payments'));},[]);
-  return <DashboardLayout title="Payment History"><div className="table-panel"><table><thead><tr><th>Service</th><th>Technician</th><th>Amount</th><th>Transaction ID</th><th>Payment date</th></tr></thead><tbody>{items.map(p=><tr key={p._id}><td>{p.serviceTitle}</td><td>{p.technicianName}</td><td>${p.amount}</td><td className="mono">{p.transactionId}</td><td>{new Date(p.paidAt).toLocaleDateString()}</td></tr>)}</tbody></table>{!items.length&&<div className="empty-state"><BadgeDollarSign/><h3>No payments yet</h3><p>Your completed payments will appear here.</p></div>}</div></DashboardLayout>;
+  const [items,setItems]=useState([]); const [loading,setLoading]=useState(true); const [loadError,setLoadError]=useState(false);
+  const load=async()=>{setLoading(true);setLoadError(false);try{const {data}=await api.get('/api/payments/my');setItems(data);}catch{setLoadError(true);toast.error('Could not load payments')}finally{setLoading(false)}};
+  useEffect(()=>{load()},[]);
+  return <DashboardLayout title="Payment History"><div className="table-panel">{loading?<div className="loading" aria-label="Loading payments"><span/></div>:loadError?<div className="empty-state" role="alert"><h3>Payment history couldn’t be loaded</h3><button className="btn btn-primary" onClick={load}>Retry</button></div>:items.length?<div className="responsive-table"><table><thead><tr><th>Service</th><th>Technician</th><th>Amount</th><th>Transaction ID</th><th>Payment date</th></tr></thead><tbody>{items.map(p=><tr key={p._id}><td>{p.serviceTitle}</td><td>{p.technicianName}</td><td>${p.amount}</td><td className="mono">{p.transactionId}</td><td>{new Date(p.paidAt).toLocaleDateString()}</td></tr>)}</tbody></table></div>:<div className="empty-state"><BadgeDollarSign/><h3>No payments yet</h3><p>Your completed payments will appear here.</p></div>}</div></DashboardLayout>;
 }
 
 function TechnicianDashboard() {
