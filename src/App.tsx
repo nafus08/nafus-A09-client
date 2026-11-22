@@ -415,9 +415,11 @@ function TechnicianRequests() {
 
 function AdminDashboard() {
   const [stats,setStats]=useState({users:0,technicians:0,pendingServices:0});
-  useEffect(()=>{api.get('/api/admin/stats').then(({data})=>setStats(data)).catch(()=>{});},[]);
+  const [loading,setLoading]=useState(true); const [loadError,setLoadError]=useState(false);
+  const load=async()=>{setLoading(true);setLoadError(false);try{const {data}=await api.get('/api/admin/stats');setStats(data)}catch{setLoadError(true)}finally{setLoading(false)}};
+  useEffect(()=>{load()},[]);
   const chartData=[{name:'Users',value:stats.users},{name:'Technicians',value:stats.technicians},{name:'Pending',value:stats.pendingServices}];
-  return <DashboardLayout title="Admin Overview"><StatCards items={[{value:stats.users,label:'Total Users'},{value:stats.technicians,label:'Total Technicians'},{value:stats.pendingServices,label:'Pending Services'}]} /><div className="panel"><h3>Platform Summary</h3><div className="chart-box"><ResponsiveContainer width="100%" height={280}><BarChart data={chartData}><XAxis dataKey="name"/><YAxis allowDecimals={false}/><Tooltip/><Bar dataKey="value" fill="#0d9488" radius={[6,6,0,0]} /></BarChart></ResponsiveContainer></div></div></DashboardLayout>;
+  return <DashboardLayout title="Admin Overview">{loading?<div className="loading" aria-label="Loading overview"><span/></div>:loadError?<div className="empty-state" role="alert"><h3>Platform summary couldn’t be loaded</h3><button className="btn btn-primary" onClick={load}>Retry</button></div>:<><StatCards items={[{value:stats.users,label:'Total Users'},{value:stats.technicians,label:'Total Technicians'},{value:stats.pendingServices,label:'Pending Services'}]} /><div className="panel"><h3>Platform Summary</h3><div className="chart-box"><ResponsiveContainer width="100%" height={280}><BarChart data={chartData}><XAxis dataKey="name"/><YAxis allowDecimals={false}/><Tooltip/><Bar dataKey="value" fill="#0d9488" radius={[6,6,0,0]} /></BarChart></ResponsiveContainer></div></div></>}</DashboardLayout>;
 }
 
 function AdminUsers() {
