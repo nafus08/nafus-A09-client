@@ -353,6 +353,7 @@ function TechnicianRequests() {
   const [rejectConfirm, setRejectConfirm] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [updatingId, setUpdatingId] = useState(null);
   const load = async () => {
     setLoading(true);
     setLoadError(false);
@@ -362,6 +363,7 @@ function TechnicianRequests() {
   };
   useEffect(() => { load(); }, []);
   const update = async (id, status, extra = {}) => {
+    setUpdatingId(id);
     try {
       await api.patch(`/api/bookings/${id}/status`, { status, ...extra });
       toast.success(`Booking marked ${status}`);
@@ -370,6 +372,8 @@ function TechnicianRequests() {
       load();
     } catch (error) {
       toast.error(error.response?.data?.message || 'Update failed');
+    } finally {
+      setUpdatingId(null);
     }
   };
   const filtered = filter === 'All' ? items : items.filter((booking) => {
@@ -387,9 +391,9 @@ function TechnicianRequests() {
           <td>{new Date(booking.preferredDate).toLocaleDateString()}</td><td className="problem-cell">{booking.problemDescription}</td>
           <td><StatusBadge status={booking.status} /></td>
           <td>{booking.status === 'requested'
-            ? <div className="table-actions"><button className="btn btn-primary btn-small" onClick={() => update(booking._id, 'accepted')}>Accept</button><button className="btn btn-danger btn-small" onClick={() => setRejectConfirm(booking)}>Reject</button></div>
-            : booking.status === 'accepted' ? <button className="btn btn-primary btn-small" onClick={() => update(booking._id, 'in-progress')}>Start Work</button>
-              : booking.status === 'in-progress' ? <button className="btn btn-primary btn-small" onClick={() => setComplete(booking)}>Mark Completed</button>
+            ? <div className="table-actions"><button className="btn btn-primary btn-small" disabled={updatingId === booking._id} onClick={() => update(booking._id, 'accepted')}>Accept</button><button className="btn btn-danger btn-small" disabled={updatingId === booking._id} onClick={() => setRejectConfirm(booking)}>Reject</button></div>
+            : booking.status === 'accepted' ? <button className="btn btn-primary btn-small" disabled={updatingId === booking._id} onClick={() => update(booking._id, 'in-progress')}>Start Work</button>
+              : booking.status === 'in-progress' ? <button className="btn btn-primary btn-small" disabled={updatingId === booking._id} onClick={() => setComplete(booking)}>Mark Completed</button>
                 : <StatusBadge status={booking.paymentStatus} />}
           </td>
         </tr>)}</tbody>
@@ -397,7 +401,7 @@ function TechnicianRequests() {
     </div>
     {rejectConfirm && <div className="modal-backdrop"><div className="modal confirm-modal" role="dialog" aria-modal="true" aria-labelledby="reject-booking-title">
       <h2 id="reject-booking-title">Reject this request?</h2><p>{rejectConfirm.serviceTitle} for {rejectConfirm.customerName} will be declined.</p>
-      <div className="modal-actions"><button className="btn btn-ghost" onClick={() => setRejectConfirm(null)}>Keep Request</button><button className="btn btn-danger" onClick={() => update(rejectConfirm._id, 'rejected')}>Confirm Rejection</button></div>
+      <div className="modal-actions"><button className="btn btn-ghost" disabled={updatingId === rejectConfirm._id} onClick={() => setRejectConfirm(null)}>Keep Request</button><button className="btn btn-danger" disabled={updatingId === rejectConfirm._id} onClick={() => update(rejectConfirm._id, 'rejected')}>{updatingId === rejectConfirm._id ? 'Updating…' : 'Confirm Rejection'}</button></div>
     </div></div>}
     {complete && <div className="modal-backdrop"><div className="modal">
       <div className="modal-head"><h2>Complete Job</h2><button onClick={() => setComplete(null)}><X /></button></div>
@@ -407,7 +411,7 @@ function TechnicianRequests() {
         update(complete._id, 'completed', { finalAmount: Number(amount) });
       }}>
         <label>Final Amount ($)<input name="amount" type="number" min="1" defaultValue={complete.finalAmount || complete.basePrice} required /></label>
-        <button className="btn btn-primary btn-full">Mark as Completed</button>
+        <button className="btn btn-primary btn-full" disabled={updatingId === complete._id}>{updatingId === complete._id ? 'Updating…' : 'Mark as Completed'}</button>
       </form>
     </div></div>}
   </DashboardLayout>;
