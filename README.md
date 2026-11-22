@@ -1,8 +1,8 @@
 # FixMate Client
 
-FixMate is a role-based device and home appliance repair booking platform built with React, TypeScript, Vite, and Better Auth.
+FixMate is a role-based repair booking platform built with Next.js, React, TypeScript, and Better Auth.
 
-## Setup
+## Local setup
 
 ```bash
 npm install
@@ -10,8 +10,8 @@ npm run typecheck
 npm run dev
 ```
 
-Set `VITE_API_URL` in `.env.local` to the Express server URL. For local development, use `http://localhost:5000`.
+Set `NEXT_PUBLIC_API_URL` in `.env.local` to the Express API origin. For local development, use `http://localhost:5000`.
 
-## Packages
+## Deployment
 
-React, React Router, Axios, Recharts, React Hot Toast, and Lucide React.
+Deploy this repository to Vercel and set `NEXT_PUBLIC_API_URL` to the deployed Express API origin. The Next.js rewrite proxies `/api/*` requests to that API.
