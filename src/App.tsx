@@ -345,7 +345,15 @@ function TechnicianRequests() {
   const [filter, setFilter] = useState('All');
   const [complete, setComplete] = useState(null);
   const [rejectConfirm, setRejectConfirm] = useState(null);
-  const load = () => api.get('/api/bookings/technician').then(({ data }) => setItems(data)).catch(() => toast.error('Could not load requests'));
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const load = async () => {
+    setLoading(true);
+    setLoadError(false);
+    try { const { data } = await api.get('/api/bookings/technician'); setItems(data); }
+    catch { setLoadError(true); toast.error('Could not load requests'); }
+    finally { setLoading(false); }
+  };
   useEffect(() => { load(); }, []);
   const update = async (id, status, extra = {}) => {
     try {
@@ -365,7 +373,7 @@ function TechnicianRequests() {
   return <DashboardLayout title="Manage Requests">
     <div className="toolbar"><label>Filter by status<select value={filter} onChange={(event) => setFilter(event.target.value)}>{['All', 'Requested', 'Accepted', 'In Progress', 'Completed'].map((status) => <option key={status}>{status}</option>)}</select></label></div>
     <div className="table-panel">
-      {filtered.length ? <div className="responsive-table"><table>
+      {loading ? <div className="loading" aria-label="Loading requests"><span /></div> : loadError ? <div className="empty-state" role="alert"><h3>Requests couldn’t be loaded</h3><button className="btn btn-primary" onClick={load}>Retry</button></div> : filtered.length ? <div className="responsive-table"><table>
         <thead><tr><th>Customer</th><th>Service</th><th>Phone / Address</th><th>Preferred Date</th><th>Problem</th><th>Status</th><th>Action</th></tr></thead>
         <tbody>{filtered.map((booking) => <tr key={booking._id}>
           <td><strong>{booking.customerName}</strong></td><td>{booking.serviceTitle}</td>
