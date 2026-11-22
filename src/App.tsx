@@ -219,11 +219,16 @@ function AuthPage({ mode }) {
   const submit = async (e) => { e.preventDefault(); setError('');
     if (mode === 'signup' && (form.password.length < 6 || !/[A-Z]/.test(form.password) || !/[a-z]/.test(form.password))) { setError('Use 6+ characters with uppercase and lowercase letters'); return; }
     try {
-      const result = mode === 'signup'
+      let result = mode === 'signup'
         ? await authClient.signUp.email({ name: form.name, email: form.email, password: form.password })
         : await authClient.signIn.email({ email: form.email, password: form.password });
       if (result.error) throw new Error(result.error.message);
-      const { data: tokenData, error: tokenError } = await authClient.token({ query: {} });
+      let tokenResponse = await authClient.token({ query: {} });
+      if (mode === 'signup' && (tokenResponse.error || !tokenResponse.data)) {
+        await authClient.signIn.email({ email: form.email, password: form.password });
+        tokenResponse = await authClient.token({ query: {} });
+      }
+      const { data: tokenData, error: tokenError } = tokenResponse;
       if (tokenError || !tokenData) throw new Error(tokenError?.message || 'Could not create an API session');
       api.defaults.headers.common.Authorization = `Bearer ${tokenData.token}`;
       if (mode === 'signup') await api.patch('/api/profile/role', { role: form.role });
